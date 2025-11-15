@@ -1,0 +1,13 @@
+[project]
+name = "crosscat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "genjax>=0.10.3",
+    "mypy>=1.18.2",
+    "pandas>=2.3.3",
+    "pytest>=9.0.1",
+    "ruff>=0.14.5",
+]
