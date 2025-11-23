@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "genjax>=0.10.3",
+    "matplotlib>=3.10.7",
     "mypy>=1.18.2",
     "pandas>=2.3.3",
     "pytest>=9.0.1",
