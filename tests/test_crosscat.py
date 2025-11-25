@@ -5,6 +5,7 @@ import time
 import jax
 import jax.numpy as jnp
 
+from crosscat import helpers
 from crosscat.constants import (
     ALPHA_CLUSTER,
     ALPHA_VIEW,
@@ -417,3 +418,75 @@ def test_timing_gibbs_sweep_jit():
     assert jnp.allclose(retval3["cat"], observed_cat)
     assert alpha_view3 > 0.0
     assert alpha_cluster3 > 0.0
+
+
+def test_helper_posteriors_and_gibbs_wrappers():
+    key = jax.random.key(5050)
+    posterior_trace, observed_cont, observed_cat = _simulate_posterior_trace(key)
+
+    helper_trace = helpers.posterior_from_observations(
+        observed_cont, observed_cat, key=jax.random.key(123)
+    )
+    helper_choices = helper_trace.get_choices()
+    assert jnp.allclose(helper_choices["rows_cont"], observed_cont)
+    helper_retval = helper_trace.get_retval()
+    assert jnp.allclose(helper_retval["cat"], observed_cat)
+
+    print(
+        "[helpers] posterior rows_cont[0]:",
+        jnp.asarray(helper_choices["rows_cont"])[0],
+    )
+    if NUM_CAT_COLS > 0:
+        print(
+            "[helpers] posterior cat row0:",
+            jnp.asarray(helper_retval["cat"])[0],
+        )
+
+    _, state = helpers.run_gibbs_iterations(
+        helper_trace, key=jax.random.key(456), num_iters=3
+    )
+    final_choices = state.trace.get_choices()
+    final_retval = state.trace.get_retval()
+    assert final_choices["rows_cont"].shape == observed_cont.shape
+    assert final_retval["cat"].shape == observed_cat.shape
+    assert state.alpha_view > 0.0
+    assert state.alpha_cluster > 0.0
+
+
+def test_helper_predictive_and_impute_samples():
+    key = jax.random.key(6060)
+    posterior_trace, observed_cont, observed_cat = _simulate_posterior_trace(key)
+
+    queries: list[tuple[int, int]] = []
+    if NUM_CONT_COLS > 0:
+        queries.append((0, 0))
+    if NUM_CAT_COLS > 0:
+        queries.append((0, NUM_CONT_COLS))
+
+    key, samples = helpers.predictive_samples(
+        posterior_trace,
+        queries,
+        key=key,
+        num_samples=5,
+    )
+    assert samples.shape == (5, len(queries))
+    print("[helpers] predictive samples:", samples)
+
+    if NUM_CAT_COLS > 0:
+        cat_draws = samples[:, -1]
+        assert jnp.all(cat_draws >= 0)
+        assert jnp.all(cat_draws < NUM_CATEGORIES)
+    if NUM_CONT_COLS > 0:
+        assert jnp.var(samples[:, 0]) > 0.0
+
+    key, imputations = helpers.impute(
+        posterior_trace, queries, key=key, num_samples=10
+    )
+    assert imputations.shape == (len(queries),)
+    print("[helpers] imputed means:", imputations)
+
+    # Original trace should remain untouched by helper sampling.
+    original_choices = posterior_trace.get_choices()
+    original_retval = posterior_trace.get_retval()
+    assert jnp.allclose(original_choices["rows_cont"], observed_cont)
+    assert jnp.allclose(original_retval["cat"], observed_cat)

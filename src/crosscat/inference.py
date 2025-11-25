@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import jax
 import jax.numpy as jnp
 from genjax import ChoiceMapBuilder as C  # type: ignore
@@ -11,7 +13,10 @@ from .model import _default_args, mixed_sbp_multiview_table
 
 
 def infer_mixed_sbp_multiview_table(
-    observed_cont: jnp.ndarray, observed_cat: jnp.ndarray
+    observed_cont: jnp.ndarray,
+    observed_cat: jnp.ndarray,
+    *,
+    key: Optional[jax.Array] = None,
 ):
     """Infer a posterior trace given observed continuous and categorical tables."""
     n_rows, n_cont_cols = observed_cont.shape
@@ -22,7 +27,8 @@ def infer_mixed_sbp_multiview_table(
     assert n_cont_cols == NUM_CONT_COLS
     assert n_cat_cols == NUM_CAT_COLS
 
-    key = jax.random.key(1)
+    if key is None:
+        key = jax.random.key(1)
     constraints = C["rows_cont"].set(observed_cont)
     constraints = constraints | C["rows_cat"].set(observed_cat)
 
@@ -34,11 +40,14 @@ def infer_mixed_sbp_multiview_table(
 
 def _simulate_posterior_trace(key: jax.Array):
     """Simulate prior table and construct a posterior trace given its observations."""
-    prior_trace = mixed_sbp_multiview_table.simulate(key, _default_args())
+    key_prior, key_post = jax.random.split(key)
+    prior_trace = mixed_sbp_multiview_table.simulate(key_prior, _default_args())
     prior_retval = prior_trace.get_retval()
     observed_cont = prior_retval["cont"]
     observed_cat = prior_retval["cat"]
-    posterior_trace = infer_mixed_sbp_multiview_table(observed_cont, observed_cat)
+    posterior_trace = infer_mixed_sbp_multiview_table(
+        observed_cont, observed_cat, key=key_post
+    )
     return posterior_trace, observed_cont, observed_cat
 
 
