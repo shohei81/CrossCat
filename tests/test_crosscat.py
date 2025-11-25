@@ -167,30 +167,55 @@ def sbp_column_views(  # type: ignore
 
 
 @gen
+def cont_column_hyperparams():  # type: ignore
+    mu0 = normal(MU0_PRIOR_MEAN, MU0_PRIOR_VAR) @ ("mu0",)
+    kappa0 = gamma(KAPPA0_A, KAPPA0_B) @ ("kappa0",)
+    alpha0 = gamma(NG_ALPHA0_A, NG_ALPHA0_B) @ ("alpha0",)
+    beta0 = gamma(NG_BETA0_A, NG_BETA0_B) @ ("beta0",)
+    return {"mu0": mu0, "kappa0": kappa0, "alpha0": alpha0, "beta0": beta0}
+
+
+@gen
+def cat_column_hyperparams():  # type: ignore
+    alpha_cat = gamma(ALPHA_CAT_A, ALPHA_CAT_B) @ ("alpha_cat",)
+    return {"alpha_cat": alpha_cat}
+
+
+@gen
 def cluster_cont_params(  # type: ignore
-    prior_mean: float,
-    kappa0: float,
-    alpha0: float,
-    beta0: float,
+    prior_mean: jnp.ndarray,
+    kappa0: jnp.ndarray,
+    alpha0: jnp.ndarray,
+    beta0: jnp.ndarray,
     n_cont_cols: Const[int],
 ):
     k = n_cont_cols.unwrap()
-    # Precision (per column) ~ Gamma(alpha0, beta0)
-    alpha_vec = alpha0 * jnp.ones(k)
-    beta_vec = beta0 * jnp.ones(k)
-    tau = gamma(alpha_vec, beta_vec) @ ("tau",)
+    if k == 0:
+        zeros = jnp.zeros((0,), dtype=jnp.float32)
+        return {"mean": zeros, "tau": zeros}
+
+    tau = gamma(alpha0, beta0) @ ("tau",)
 
     # Mean | tau ~ Normal(prior_mean, (kappa0 * tau)^(-1))
-    var_means = 1.0 / (kappa0 * tau)
-    means = normal(prior_mean * jnp.ones(k), var_means) @ ("mean",)
+    var_means = 1.0 / jnp.clip(kappa0 * tau, 1e-20)
+    means = normal(prior_mean, var_means) @ ("mean",)
     return {"mean": means, "tau": tau}
 
 
 @gen
-def cluster_cat_params(alpha: float, n_categories: Const[int]):  # type: ignore
-    alphas = alpha * jnp.ones(n_categories.unwrap())
+def cluster_cat_params(  # type: ignore
+    alpha_vec: jnp.ndarray,
+    n_cat_cols: Const[int],
+    n_categories: Const[int],
+):
+    k = n_cat_cols.unwrap()
+    if k == 0:
+        return {"probs": jnp.zeros((0, n_categories.unwrap()))}
+
+    n_cats = n_categories.unwrap()
+    alphas = jnp.broadcast_to(alpha_vec[:, None], (k, n_cats))
     probs = dirichlet(alphas) @ ("probs",)
-    return probs
+    return {"probs": probs}
 
 
 @gen
@@ -218,6 +243,29 @@ def mixed_sbp_multiview_table(  # type: ignore
 
     total_cols = num_cont_cols + num_cat_cols
 
+    if num_cont_cols > 0:
+        hyper_cont = (
+            cont_column_hyperparams.repeat(n=num_cont_cols)() @ ("hyper_cont",)
+        )
+        mu0_vec = hyper_cont["mu0"]
+        kappa0_vec = hyper_cont["kappa0"]
+        ng_alpha0_vec = hyper_cont["alpha0"]
+        ng_beta0_vec = hyper_cont["beta0"]
+    else:
+        zeros = jnp.zeros((0,), dtype=jnp.float32)
+        mu0_vec = zeros
+        kappa0_vec = zeros
+        ng_alpha0_vec = zeros
+        ng_beta0_vec = zeros
+
+    if num_cat_cols > 0:
+        hyper_cat = (
+            cat_column_hyperparams.repeat(n=num_cat_cols)() @ ("hyper_cat",)
+        )
+        alpha_cat_vec = hyper_cat["alpha_cat"]
+    else:
+        alpha_cat_vec = jnp.zeros((0,), dtype=jnp.float32)
+
     view_idx = sbp_column_views(Const(total_cols), n_views, alpha_view) @ ("views",)
 
     cluster_weights = sbp_weights.repeat(n=num_views)(alpha_cluster, n_clusters) @ (
@@ -226,7 +274,11 @@ def mixed_sbp_multiview_table(  # type: ignore
 
     clusters_cont_params_flat = (
         cluster_cont_params.repeat(n=num_views * num_clusters)(
-            PRIOR_MEAN, NG_KAPPA0, NG_ALPHA0, NG_BETA0, n_cont_cols
+            mu0_vec,
+            kappa0_vec,
+            ng_alpha0_vec,
+            ng_beta0_vec,
+            n_cont_cols,
         )
         @ ("clusters_cont",)
     )
@@ -238,12 +290,12 @@ def mixed_sbp_multiview_table(  # type: ignore
     )
 
     cat_params_flat = (
-        cluster_cat_params.repeat(n=num_views * num_clusters * num_cat_cols)(
-            alpha_cat, Const(NUM_CATEGORIES)
+        cluster_cat_params.repeat(n=num_views * num_clusters)(
+            alpha_cat_vec, n_cat_cols, Const(NUM_CATEGORIES)
         )
         @ ("clusters_cat",)
     )
-    cat_params = cat_params_flat.reshape(
+    cat_params = cat_params_flat["probs"].reshape(
         (num_views, num_clusters, num_cat_cols, NUM_CATEGORIES)
     )
 
@@ -375,12 +427,47 @@ def _simulate_posterior_trace(key: jax.Array):
     return posterior_trace, observed_cont, observed_cat
 
 
+def _extract_hyperparams_from_trace(trace):
+    """Return current column-wise hyperparameters stored in the trace choices."""
+    args = trace.get_args()
+    n_cont_cols = args[1].unwrap()
+    n_cat_cols = args[2].unwrap()
+    choices = trace.get_choices()
+
+    if n_cont_cols > 0:
+        mu0_vec = choices["hyper_cont", "mu0"]
+        kappa0_vec = choices["hyper_cont", "kappa0"]
+        ng_alpha0_vec = choices["hyper_cont", "alpha0"]
+        ng_beta0_vec = choices["hyper_cont", "beta0"]
+    else:
+        zero = jnp.zeros((0,), dtype=jnp.float32)
+        mu0_vec = zero
+        kappa0_vec = zero
+        ng_alpha0_vec = zero
+        ng_beta0_vec = zero
+
+    if n_cat_cols > 0:
+        alpha_cat_vec = choices["hyper_cat", "alpha_cat"]
+    else:
+        alpha_cat_vec = jnp.zeros((0,), dtype=jnp.float32)
+
+    return mu0_vec, kappa0_vec, ng_alpha0_vec, ng_beta0_vec, alpha_cat_vec
+
+
 # ======================
 # Trace-based Gibbs updates (using jitted_update)
 # ======================
 
 
-def gibbs_update_row_clusters(key, trace, alpha_cat_vec: jax.Array):
+def gibbs_update_row_clusters(
+    key,
+    trace,
+    mu0_vec: jax.Array,
+    kappa0_vec: jax.Array,
+    ng_alpha0: jax.Array,
+    ng_beta0: jax.Array,
+    alpha_cat_vec: jax.Array,
+):
     """Gibbs update for row cluster assignments in this model."""
     args = trace.get_args()
     n_rows = args[0].unwrap()
@@ -475,22 +562,28 @@ def gibbs_update_row_clusters(key, trace, alpha_cat_vec: jax.Array):
                 x_r_cont**2
             )[None, :]
 
-            y_new_mat = jnp.broadcast_to(
-                x_r_cont[None, :], sum_y_minus.shape
-            )  # (n_clusters, n_cont_cols)
-            log_pred_mat = _normal_gamma_predictive_loglik_from_stats(
-                n_minus[:, None],
-                sum_y_minus,
-                sumsq_y_minus,
-                y_new_mat,
-                PRIOR_MEAN,
-                NG_KAPPA0,
-                NG_ALPHA0,
-                NG_BETA0,
-            )  # (n_clusters, n_cont_cols)
-            loglik_cont = jnp.sum(
-                log_pred_mat * mask_cont_v[None, :], axis=1
-            )  # (n_clusters,)
+            if n_cont_cols > 0:
+                y_new_mat = jnp.broadcast_to(
+                    x_r_cont[None, :], sum_y_minus.shape
+                )  # (n_clusters, n_cont_cols)
+                n_broadcast = jnp.broadcast_to(
+                    n_minus[:, None], sum_y_minus.shape
+                )
+                log_pred_mat = _normal_gamma_predictive_loglik_from_stats(
+                    n_broadcast,
+                    sum_y_minus,
+                    sumsq_y_minus,
+                    y_new_mat,
+                    mu0_vec,
+                    kappa0_vec,
+                    ng_alpha0,
+                    ng_beta0,
+                )  # (n_clusters, n_cont_cols)
+                loglik_cont = jnp.sum(
+                    log_pred_mat * mask_cont_v[None, :], axis=1
+                )  # (n_clusters,)
+            else:
+                loglik_cont = jnp.zeros((n_clusters,))
 
             # Categorical part (collapsed Dirichlet-Multinomial).
             if n_cat_cols > 0:
@@ -579,7 +672,15 @@ def gibbs_update_row_clusters(key, trace, alpha_cat_vec: jax.Array):
     return key, new_trace
 
 
-def gibbs_update_column_views(key, trace, alpha_cat_vec: jax.Array):
+def gibbs_update_column_views(
+    key,
+    trace,
+    mu0_vec: jax.Array,
+    kappa0_vec: jax.Array,
+    ng_alpha0: jax.Array,
+    ng_beta0: jax.Array,
+    alpha_cat_vec: jax.Array,
+):
     """Gibbs update for column view assignments in mixed SBP model (collapsed cat)."""
     args = trace.get_args()
     n_rows = args[0].unwrap()
@@ -609,6 +710,10 @@ def gibbs_update_column_views(key, trace, alpha_cat_vec: jax.Array):
     def _loglik_cont_for_view(
         table_cont_col: jax.Array,
         row_clusters_v: jax.Array,
+        mu0_c: float,
+        kappa0_c: float,
+        alpha0_c: float,
+        beta0_c: float,
     ) -> jax.Array:
         """Collapsed Normal-Gamma log-likelihood for one view and one cont column."""
         y = table_cont_col
@@ -623,10 +728,10 @@ def gibbs_update_column_views(key, trace, alpha_cat_vec: jax.Array):
             n_k,
             sum_y,
             sumsq_y,
-            PRIOR_MEAN,
-            NG_KAPPA0,
-            NG_ALPHA0,
-            NG_BETA0,
+            mu0_c,
+            kappa0_c,
+            alpha0_c,
+            beta0_c,
         )
         return jnp.sum(log_marg_per_cluster)
 
@@ -662,13 +767,21 @@ def gibbs_update_column_views(key, trace, alpha_cat_vec: jax.Array):
         if c < n_cont_cols:
             col_idx = c
             table_cont_col = table_cont[:, col_idx]  # (n_rows,)
+            mu0_c = mu0_vec[col_idx]
+            kappa0_c = kappa0_vec[col_idx]
+            alpha0_c = ng_alpha0[col_idx]
+            beta0_c = ng_beta0[col_idx]
             loglik_vec = jax.vmap(
                 _loglik_cont_for_view,
-                in_axes=(None, 0),
+                in_axes=(None, 0, None, None, None, None),
                 out_axes=0,
             )(
                 table_cont_col,
                 row_clusters,
+                mu0_c,
+                kappa0_c,
+                alpha0_c,
+                beta0_c,
             )  # (n_views,)
         else:
             c_cat = c - n_cont_cols
@@ -1200,10 +1313,14 @@ def gibbs_update_alpha_cat(
         (key, alpha_cat_new), _ = lax.scan(
             body, (key, alpha_cat_vec), jnp.arange(n_cat_cols)
         )
+        cm = C["hyper_cat", "alpha_cat"].set(alpha_cat_new)
+        argdiffs = genjax.Diff.no_change(trace.args)
+        key, subkey = jax.random.split(key)
+        trace, _, _, _ = jitted_update(subkey, trace, cm, argdiffs)
     else:
         alpha_cat_new = alpha_cat_vec
 
-    return key, alpha_cat_new
+    return key, trace, alpha_cat_new
 
 
 def gibbs_update_ng_hyperparams(
@@ -1246,11 +1363,16 @@ def gibbs_update_ng_hyperparams(
             (key, ng_alpha0, ng_beta0),
             jnp.arange(n_cont_cols),
         )
+        cm = C["hyper_cont", "alpha0"].set(ng_alpha0_new)
+        cm = cm.at["hyper_cont", "beta0"].set(ng_beta0_new)
+        argdiffs = genjax.Diff.no_change(trace.args)
+        key, subkey = jax.random.split(key)
+        trace, _, _, _ = jitted_update(subkey, trace, cm, argdiffs)
     else:
         ng_alpha0_new = ng_alpha0
         ng_beta0_new = ng_beta0
 
-    return key, ng_alpha0_new, ng_beta0_new
+    return key, trace, ng_alpha0_new, ng_beta0_new
 
 
 def gibbs_update_mu0_kappa0_hyperparams(
@@ -1295,11 +1417,16 @@ def gibbs_update_mu0_kappa0_hyperparams(
         (key, mu0_new, kappa0_new), _ = lax.scan(
             body, (key, mu0_vec, kappa0_vec), jnp.arange(n_cont_cols)
         )
+        cm = C["hyper_cont", "mu0"].set(mu0_new)
+        cm = cm.at["hyper_cont", "kappa0"].set(kappa0_new)
+        argdiffs = genjax.Diff.no_change(trace.args)
+        key, subkey = jax.random.split(key)
+        trace, _, _, _ = jitted_update(subkey, trace, cm, argdiffs)
     else:
         mu0_new = mu0_vec
         kappa0_new = kappa0_vec
 
-    return key, mu0_new, kappa0_new
+    return key, trace, mu0_new, kappa0_new
 
 
 def gibbs_sweep(
@@ -1315,7 +1442,9 @@ def gibbs_sweep(
 ):
     """1 Gibbs sweep (trace-based, each block update internally uses jitted_update)."""
     # Row clusters
-    key, trace = gibbs_update_row_clusters(key, trace, alpha_cat_vec)
+    key, trace = gibbs_update_row_clusters(
+        key, trace, mu0_vec, kappa0_vec, ng_alpha0, ng_beta0, alpha_cat_vec
+    )
 
     # Cluster params (uses Normal-Gamma and Dirichlet hyperparameters)
     key, trace = gibbs_update_cluster_params(
@@ -1338,20 +1467,22 @@ def gibbs_sweep(
     )
 
     # Hyperparameter alpha_cat (Dirichlet concentration for categorical params, per column)
-    key, alpha_cat_vec = gibbs_update_alpha_cat(key, trace, alpha_cat_vec)
+    key, trace, alpha_cat_vec = gibbs_update_alpha_cat(key, trace, alpha_cat_vec)
 
     # Hyperparameters for Normal-Gamma prior (continuous scale)
-    key, ng_alpha0, ng_beta0 = gibbs_update_ng_hyperparams(
+    key, trace, ng_alpha0, ng_beta0 = gibbs_update_ng_hyperparams(
         key, trace, ng_alpha0, ng_beta0
     )
 
     # Hyperparameters for Normal-Gamma prior (continuous location)
-    key, mu0_vec, kappa0_vec = gibbs_update_mu0_kappa0_hyperparams(
+    key, trace, mu0_vec, kappa0_vec = gibbs_update_mu0_kappa0_hyperparams(
         key, trace, mu0_vec, kappa0_vec
     )
 
     # Column views
-    key, trace = gibbs_update_column_views(key, trace, alpha_cat_vec)
+    key, trace = gibbs_update_column_views(
+        key, trace, mu0_vec, kappa0_vec, ng_alpha0, ng_beta0, alpha_cat_vec
+    )
 
     return (
         key,
@@ -1441,13 +1572,13 @@ def run_gibbs_mcmc(
 
     Internally uses jitted_update, but this function itself is kept non-jitted.
     """
-    n_cont_cols = trace.get_args()[1].unwrap()
-    n_cat_cols = trace.get_args()[2].unwrap()
-    ng_alpha0_vec = jnp.full((n_cont_cols,), ng_alpha0)
-    ng_beta0_vec = jnp.full((n_cont_cols,), ng_beta0)
-    alpha_cat_vec = jnp.full((n_cat_cols,), ALPHA_CAT)
-    mu0_vec = jnp.full((n_cont_cols,), PRIOR_MEAN)
-    kappa0_vec = jnp.full((n_cont_cols,), NG_KAPPA0)
+    (
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    ) = _extract_hyperparams_from_trace(trace)
 
     state0 = GibbsState(
         key,
@@ -1481,14 +1612,34 @@ def test_update_row_and_column_gibbs_preserves_observations():
     original_cont = original_choices["rows_cont"]
     original_cat = original_retval["cat"]
 
-    alpha_cat_vec = jnp.full((NUM_CAT_COLS,), ALPHA_CAT)
+    (
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    ) = _extract_hyperparams_from_trace(posterior_trace)
 
     key, subkey = jax.random.split(key)
     key, trace = gibbs_update_row_clusters(
-        subkey, posterior_trace, alpha_cat_vec
+        subkey,
+        posterior_trace,
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
     )
     key, subkey = jax.random.split(key)
-    key, trace = gibbs_update_column_views(subkey, trace, alpha_cat_vec)
+    key, trace = gibbs_update_column_views(
+        subkey,
+        trace,
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    )
 
     updated_choices = trace.get_choices()
     updated_retval = trace.get_retval()
@@ -1509,11 +1660,13 @@ def test_gibbs_sweep_preserves_observations_and_shapes():
 
     alpha_view = ALPHA_VIEW
     alpha_cluster = ALPHA_CLUSTER
-    alpha_cat_vec = jnp.full((NUM_CAT_COLS,), ALPHA_CAT)
-    mu0_vec = jnp.full((NUM_CONT_COLS,), PRIOR_MEAN)
-    kappa0_vec = jnp.full((NUM_CONT_COLS,), NG_KAPPA0)
-    ng_alpha0 = jnp.full((NUM_CONT_COLS,), NG_ALPHA0)
-    ng_beta0 = jnp.full((NUM_CONT_COLS,), NG_BETA0)
+    (
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0,
+        ng_beta0,
+        alpha_cat_vec,
+    ) = _extract_hyperparams_from_trace(posterior_trace)
 
     (
         key,
@@ -1626,13 +1779,35 @@ def test_timing_gibbs_update_kernels_jit():
     # JIT row-cluster update
     jitted_row = jax.jit(gibbs_update_row_clusters)
 
-    alpha_cat_vec = jnp.full((NUM_CAT_COLS,), ALPHA_CAT)
+    (
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    ) = _extract_hyperparams_from_trace(posterior_trace)
 
     key_row = key
     t0 = time.perf_counter()
-    key_row, trace_row = jitted_row(key_row, posterior_trace, alpha_cat_vec)
+    key_row, trace_row = jitted_row(
+        key_row,
+        posterior_trace,
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    )
     t1 = time.perf_counter()
-    key_row, trace_row = jitted_row(key_row, trace_row, alpha_cat_vec)
+    key_row, trace_row = jitted_row(
+        key_row,
+        trace_row,
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    )
     t2 = time.perf_counter()
 
     print(
@@ -1645,9 +1820,25 @@ def test_timing_gibbs_update_kernels_jit():
 
     key_col = key
     t3 = time.perf_counter()
-    key_col, trace_col = jitted_col(key_col, posterior_trace, alpha_cat_vec)
+    key_col, trace_col = jitted_col(
+        key_col,
+        posterior_trace,
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    )
     t4 = time.perf_counter()
-    key_col, trace_col = jitted_col(key_col, trace_col, alpha_cat_vec)
+    key_col, trace_col = jitted_col(
+        key_col,
+        trace_col,
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0_vec,
+        ng_beta0_vec,
+        alpha_cat_vec,
+    )
     t5 = time.perf_counter()
 
     print(
@@ -1675,11 +1866,13 @@ def test_timing_gibbs_sweep_jit():
 
     alpha_view = ALPHA_VIEW
     alpha_cluster = ALPHA_CLUSTER
-    alpha_cat_vec = jnp.full((NUM_CAT_COLS,), ALPHA_CAT)
-    mu0_vec = jnp.full((NUM_CONT_COLS,), PRIOR_MEAN)
-    kappa0_vec = jnp.full((NUM_CONT_COLS,), NG_KAPPA0)
-    ng_alpha0 = jnp.full((NUM_CONT_COLS,), NG_ALPHA0)
-    ng_beta0 = jnp.full((NUM_CONT_COLS,), NG_BETA0)
+    (
+        mu0_vec,
+        kappa0_vec,
+        ng_alpha0,
+        ng_beta0,
+        alpha_cat_vec,
+    ) = _extract_hyperparams_from_trace(posterior_trace)
 
     # Explicitly separate compilation and execution.
     t0 = time.perf_counter()
