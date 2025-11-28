@@ -14,7 +14,7 @@ services:
     working_dir: /workspaces/crosscat
     command: ["bash"]
 
-  probcomp:
+  legacy:
     build:
       context: ..
       dockerfile: docker/legacy/Dockerfile
