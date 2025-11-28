@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+.mypy_cache
+.ruff_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.swp
+.DS_Store
+docs/
+experiment/
+tests/
