@@ -1,0 +1,28 @@
+services:
+  genjax:
+    build:
+      context: ..
+      dockerfile: docker/genjax/Dockerfile
+    image: crosscat-genjax:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ..:/workspaces/crosscat:cached
+      - genjax-uv-cache:/root/.cache/uv
+    working_dir: /workspaces/crosscat
+    command: ["bash"]
+
+  probcomp:
+    build:
+      context: ..
+      dockerfile: docker/legacy/Dockerfile
+    image: crosscat-legacy:latest
+    volumes:
+      - ..:/workspaces/crosscat:cached
+    working_dir: /workspaces/crosscat
+    command: ["bash"]
+
+volumes:
+  genjax-uv-cache:
