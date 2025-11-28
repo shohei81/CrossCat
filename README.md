@@ -6,7 +6,7 @@ Two container images capture the environments described in `TODO.md`.
 | Target | Dockerfile | Image name (via Compose) | Notes |
 | --- | --- | --- | --- |
 | Modern GenJAX benchmarks | `docker/genjax/Dockerfile` | `crosscat-genjax` | CUDA 12.4 runtime, Python 3.11 managed via `uv`, installs the repo with the locked dependencies. |
-| Legacy probcomp/crosscat | `docker/legacy/Dockerfile` | `crosscat-legacy` | Ubuntu 18.04 base, Python 3.8 toolchain pinned to values tolerated by the historical C++/Python backend. |
+| Legacy probcomp/crosscat | `docker/legacy/Dockerfile` | `crosscat-legacy` | Ubuntu 18.04 base, Python 2.7 toolchain pinned to values tolerated by the historical C++/Python backend. |
 
 Both containers mount the repository inside `/workspaces/crosscat`, so results, datasets (`./data`, `./experiment`, etc.), and configuration files are automatically shared with the host.
 
