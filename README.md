@@ -16,7 +16,7 @@ Both containers mount the repository inside `/workspaces/crosscat`, so results, 
 docker compose -f docker/docker-compose.yml build
 
 # Start a GPU-enabled GenJAX shell
-docker compose -f docker/docker-compose.yml run --rm --gpus all genjax
+docker compose -f docker/docker-compose.yml run --rm genjax
 
 # Start the legacy probcomp/crosscat shell
 docker compose -f docker/docker-compose.yml run --rm legacy
