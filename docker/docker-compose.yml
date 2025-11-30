@@ -4,10 +4,8 @@ services:
       context: ..
       dockerfile: docker/genjax/Dockerfile
     image: crosscat-genjax:latest
-    runtime: nvidia
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - JAX_PLATFORM_NAME=cpu
     volumes:
       - ..:/workspaces/crosscat:cached
       - genjax-uv-cache:/root/.cache/uv
