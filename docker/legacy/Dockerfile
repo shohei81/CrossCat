@@ -41,14 +41,17 @@ RUN python2.7 -m pip install \
         numpy==1.16.6 \
         pandas==0.24.2 \
         scipy==1.2.3 \
-        cython==0.29.36
+        cython==0.29.36 \
+        pytest==4.6.11
 
 ARG CROSSCAT_REPO=https://github.com/probcomp/crosscat.git
 ARG CROSSCAT_REF=master
 RUN git clone --single-branch --branch "${CROSSCAT_REF}" "${CROSSCAT_REPO}" /opt/probcomp/crosscat
 
 WORKDIR /opt/probcomp/crosscat
-RUN python2.7 -m pip install -e .
+RUN python2.7 -m pip install -e . && \
+    ln -sfn src crosscat && \
+    python2.7 setup.py build_py
 
 ENV PYTHONPATH=/opt/probcomp/crosscat
 WORKDIR /workspace

@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 from genjax import ChoiceMapBuilder as C  # type: ignore
 
-from .constants import NUM_CAT_COLS, NUM_CONT_COLS, NUM_ROWS
+from . import constants as const
 from .model import _default_args, mixed_sbp_multiview_table
 
 
@@ -22,10 +22,10 @@ def infer_mixed_sbp_multiview_table(
     n_rows, n_cont_cols = observed_cont.shape
     n_rows_cat, n_cat_cols = observed_cat.shape
 
-    assert n_rows == NUM_ROWS
-    assert n_rows_cat == NUM_ROWS
-    assert n_cont_cols == NUM_CONT_COLS
-    assert n_cat_cols == NUM_CAT_COLS
+    assert n_rows == const.NUM_ROWS
+    assert n_rows_cat == const.NUM_ROWS
+    assert n_cont_cols == const.NUM_CONT_COLS
+    assert n_cat_cols == const.NUM_CAT_COLS
 
     if key is None:
         key = jax.random.key(1)

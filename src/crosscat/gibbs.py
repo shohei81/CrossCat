@@ -11,25 +11,7 @@ from genjax import ChoiceMapBuilder as C  # type: ignore
 from jax import lax
 from jax.scipy.special import gammaln
 
-from .constants import (
-    ALPHA_CAT_A,
-    ALPHA_CAT_B,
-    ALPHA_CLUSTER_A,
-    ALPHA_CLUSTER_B,
-    ALPHA_VIEW_A,
-    ALPHA_VIEW_B,
-    KAPPA0_A,
-    KAPPA0_B,
-    MU0_PRIOR_MEAN,
-    MU0_PRIOR_VAR,
-    NG_ALPHA0,
-    NG_ALPHA0_A,
-    NG_ALPHA0_B,
-    NG_BETA0,
-    NG_BETA0_A,
-    NG_BETA0_B,
-    NUM_CATEGORIES,
-)
+from . import constants as const
 from .inference import _extract_hyperparams_from_trace
 from .model import jitted_update
 from .stats import (
@@ -132,16 +114,16 @@ def gibbs_update_row_clusters(
         # Initial categorical counts (cluster, column, category).
         y_all = rows_cat.astype(jnp.int32)  # (n_rows, n_cat_cols)
         idx_flat = (
-            row_clusters_v[:, None] * (n_cat_cols * NUM_CATEGORIES)
-            + jnp.arange(n_cat_cols)[None, :] * NUM_CATEGORIES
+            row_clusters_v[:, None] * (n_cat_cols * const.NUM_CATEGORIES)
+            + jnp.arange(n_cat_cols)[None, :] * const.NUM_CATEGORIES
             + y_all
         )
         counts_flat = jnp.bincount(
             idx_flat.reshape(-1),
-            length=n_clusters * n_cat_cols * NUM_CATEGORIES,
-            minlength=n_clusters * n_cat_cols * NUM_CATEGORIES,
+            length=n_clusters * n_cat_cols * const.NUM_CATEGORIES,
+            minlength=n_clusters * n_cat_cols * const.NUM_CATEGORIES,
         ).astype(jnp.int32)
-        counts_cat = counts_flat.reshape((n_clusters, n_cat_cols, NUM_CATEGORIES))
+        counts_cat = counts_flat.reshape((n_clusters, n_cat_cols, const.NUM_CATEGORIES))
 
         def one_row(carry, r_idx):
             key_local, row_clusters_curr, counts_curr, n_k_curr, sum_y_curr, sumsq_y_curr = carry
@@ -183,17 +165,18 @@ def gibbs_update_row_clusters(
                 loglik_cont = jnp.zeros((n_clusters,))
 
             # Categorical part (collapsed Dirichlet-Multinomial).
+            counts_minus = counts_curr
+            y_r = jnp.zeros((n_cat_cols,), dtype=jnp.int32)
             if n_cat_cols > 0:
                 y_r = rows_cat[r_idx].astype(jnp.int32)  # (n_cat_cols,)
                 old_k = row_clusters_curr[r_idx]
 
                 # Temporarily remove the contribution of row r.
-                counts_minus = counts_curr
                 counts_minus = counts_minus.at[
                     old_k, jnp.arange(n_cat_cols), y_r
                 ].add(-1)
 
-                counts_k = counts_minus  # (n_clusters, n_cat_cols, NUM_CATEGORIES)
+                counts_k = counts_minus  # (n_clusters, n_cat_cols, const.NUM_CATEGORIES)
                 n_sum = jnp.sum(counts_k, axis=2)  # (n_clusters, n_cat_cols)
 
                 y_idx = y_r[None, :, None]  # (1, n_cat_cols, 1)
@@ -203,7 +186,7 @@ def gibbs_update_row_clusters(
 
                 alpha_c = alpha_cat_vec_full  # (n_cat_cols,)
                 numer = alpha_c[None, :] + counts_y
-                denom = alpha_c[None, :] * NUM_CATEGORIES + n_sum
+                denom = alpha_c[None, :] * const.NUM_CATEGORIES + n_sum
 
                 loglik_cat_mat = jnp.log(jnp.clip(numer, 1e-20, jnp.inf)) - jnp.log(
                     jnp.clip(denom, 1e-20, jnp.inf)
@@ -341,17 +324,17 @@ def gibbs_update_column_views(
         y = table_cat_col.astype(jnp.int32)  # (n_rows,)
         z = row_clusters_v.astype(jnp.int32)  # (n_rows,)
 
-        idx = z * NUM_CATEGORIES + y  # (n_rows,)
+        idx = z * const.NUM_CATEGORIES + y  # (n_rows,)
         counts_flat = jnp.bincount(
             idx,
-            length=n_clusters * NUM_CATEGORIES,
-            minlength=n_clusters * NUM_CATEGORIES,
+            length=n_clusters * const.NUM_CATEGORIES,
+            minlength=n_clusters * const.NUM_CATEGORIES,
         ).astype(jnp.float32)
-        counts = counts_flat.reshape((n_clusters, NUM_CATEGORIES))
+        counts = counts_flat.reshape((n_clusters, const.NUM_CATEGORIES))
 
         n_k = jnp.sum(counts, axis=1)  # (n_clusters,)
 
-        alpha0 = alpha_c * NUM_CATEGORIES
+        alpha0 = alpha_c * const.NUM_CATEGORIES
         # log p(data | alpha) = sum_k [ log Gamma(alpha0) - log Gamma(n_k + alpha0)
         #                              + sum_t (log Gamma(n_{k,t}+alpha_c) - log Gamma(alpha_c)) ]
         term1 = gammaln(alpha0) - gammaln(n_k + alpha0)  # (n_clusters,)
@@ -435,10 +418,16 @@ def gibbs_update_cluster_params(
     clusters_prec_flat = choices["clusters_cont", "tau"]
     clusters_prec = clusters_prec_flat.reshape((n_views, n_clusters, n_cont_cols))
 
-    cat_params_flat = choices["clusters_cat", "probs"]
-    cat_params = cat_params_flat.reshape(
-        (n_views, n_clusters, n_cat_cols, NUM_CATEGORIES)
-    )
+    if n_cat_cols > 0:
+        cat_params_flat = choices["clusters_cat", "probs"]
+        cat_params = cat_params_flat.reshape(
+            (n_views, n_clusters, n_cat_cols, const.NUM_CATEGORIES)
+        )
+    else:
+        cat_params_flat = jnp.zeros((0,), dtype=table_cont.dtype)
+        cat_params = jnp.zeros(
+            (n_views, n_clusters, 0, const.NUM_CATEGORIES), dtype=table_cont.dtype
+        )
 
     row_clusters = choices["row_clusters", "idx"]
 
@@ -517,15 +506,15 @@ def gibbs_update_cluster_params(
         y_col = table_cat[:, c_idx].astype(int)
         row_clusters_v = row_clusters[v_c]
 
-        idx = row_clusters_v * NUM_CATEGORIES + y_col
+        idx = row_clusters_v * const.NUM_CATEGORIES + y_col
         counts_flat = jnp.bincount(
             idx,
-            length=n_clusters * NUM_CATEGORIES,
-            minlength=n_clusters * NUM_CATEGORIES,
+            length=n_clusters * const.NUM_CATEGORIES,
+            minlength=n_clusters * const.NUM_CATEGORIES,
         ).astype(table_cat.dtype)
-        counts = counts_flat.reshape((n_clusters, NUM_CATEGORIES))
+        counts = counts_flat.reshape((n_clusters, const.NUM_CATEGORIES))
 
-        alpha_prior = alpha_cat_vec[c_idx] * jnp.ones((n_clusters, NUM_CATEGORIES))
+        alpha_prior = alpha_cat_vec[c_idx] * jnp.ones((n_clusters, const.NUM_CATEGORIES))
         alpha_post = alpha_prior + counts
 
         key_local, subkey = jax.random.split(key_local)
@@ -549,7 +538,8 @@ def gibbs_update_cluster_params(
 
     cm = C["clusters_cont", "mean"].set(new_cont_flat)
     cm = cm.at["clusters_cont", "tau"].set(new_prec_flat)
-    cm = cm.at["clusters_cat", "probs"].set(new_cat_flat)
+    if n_cat_cols > 0:
+        cm = cm.at["clusters_cat", "probs"].set(new_cat_flat)
 
     argdiffs = genjax.Diff.no_change(trace.args)
     key, subkey = jax.random.split(key)
@@ -716,7 +706,7 @@ def _sample_ng_alpha0_from_prec_grid(
     alpha_grid = jnp.exp(log_alpha0 + offsets)
 
     # Prior on alpha0: Gamma(NG_ALPHA0_A, NG_ALPHA0_B)
-    log_prior = (NG_ALPHA0_A - 1.0) * jnp.log(alpha_grid) - NG_ALPHA0_B * alpha_grid
+    log_prior = (const.NG_ALPHA0_A - 1.0) * jnp.log(alpha_grid) - const.NG_ALPHA0_B * alpha_grid
 
     # Likelihood of prec under Gamma(alpha0, beta0_current)
     # sum_j [ (alpha0-1)log tau_j - beta0*tau_j + alpha0*log beta0 - gammaln(alpha0) ]
@@ -753,7 +743,7 @@ def _sample_ng_beta0_from_prec_grid(
     beta_grid = jnp.exp(log_beta0 + offsets)
 
     # Prior on beta0: Gamma(NG_BETA0_A, NG_BETA0_B)
-    log_prior = (NG_BETA0_A - 1.0) * jnp.log(beta_grid) - NG_BETA0_B * beta_grid
+    log_prior = (const.NG_BETA0_A - 1.0) * jnp.log(beta_grid) - const.NG_BETA0_B * beta_grid
 
     # Likelihood of prec under Gamma(alpha0_current, beta0)
     # sum_j [ (alpha0-1)log tau_j - beta*tau_j + alpha0*log beta - gammaln(alpha0) ]
@@ -793,7 +783,7 @@ def _sample_mu0_from_means_grid(
     log_lik = -0.5 * jnp.sum(weighted_sq, axis=1)
 
     # Prior: mu0 ~ Normal(MU0_PRIOR_MEAN, MU0_PRIOR_VAR)
-    log_prior = -0.5 * (mu_grid - MU0_PRIOR_MEAN) ** 2 / MU0_PRIOR_VAR
+    log_prior = -0.5 * (mu_grid - const.MU0_PRIOR_MEAN) ** 2 / const.MU0_PRIOR_VAR
 
     log_post = log_lik + log_prior
     key, subkey = jax.random.split(key)
@@ -828,7 +818,7 @@ def _sample_kappa0_from_means_grid(
     log_lik = 0.5 * m * jnp.log(kappa_grid) - 0.5 * kappa_grid * S
 
     # Prior: kappa0 ~ Gamma(KAPPA0_A, KAPPA0_B)
-    log_prior = (KAPPA0_A - 1.0) * jnp.log(kappa_grid) - KAPPA0_B * kappa_grid
+    log_prior = (const.KAPPA0_A - 1.0) * jnp.log(kappa_grid) - const.KAPPA0_B * kappa_grid
 
     log_post = log_lik + log_prior
     key, subkey = jax.random.split(key)
@@ -849,10 +839,10 @@ def gibbs_update_alphas(
     v_clusters = choices["cluster_weights", "v"]  # (n_views, n_clusters-1)
 
     key, alpha_view_new = _sample_alpha_from_sticks_sbp(
-        key, v_views, alpha_view, ALPHA_VIEW_A, ALPHA_VIEW_B
+        key, v_views, alpha_view, const.ALPHA_VIEW_A, const.ALPHA_VIEW_B
     )
     key, alpha_cluster_new = _sample_alpha_from_sticks_sbp(
-        key, v_clusters, alpha_cluster, ALPHA_CLUSTER_A, ALPHA_CLUSTER_B
+        key, v_clusters, alpha_cluster, const.ALPHA_CLUSTER_A, const.ALPHA_CLUSTER_B
     )
 
     # Update trace args so that subsequent uses of mixed_sbp_multiview_table
@@ -884,16 +874,19 @@ def gibbs_update_alpha_cat(
     alpha_cat_vec: jax.Array,
 ):
     """Gibbs update for per-column alpha_cat_vec from Dirichlet cluster_cat_params."""
-    choices = trace.get_choices()
-    cat_params_flat = choices["clusters_cat", "probs"]
-
     args = trace.get_args()
     n_cat_cols = args[2].unwrap()
     n_views = args[3].unwrap()
     n_clusters = args[4].unwrap()
 
+    if n_cat_cols == 0:
+        return key, trace, alpha_cat_vec
+
+    choices = trace.get_choices()
+    cat_params_flat = choices["clusters_cat", "probs"]
+
     cat_params = cat_params_flat.reshape(
-        (n_views, n_clusters, n_cat_cols, NUM_CATEGORIES)
+        (n_views, n_clusters, n_cat_cols, const.NUM_CATEGORIES)
     )
 
     def body(carry, c_idx):
@@ -901,7 +894,7 @@ def gibbs_update_alpha_cat(
         probs_col = cat_params[:, :, c_idx, :]
         alpha_c = alpha_vec[c_idx]
         key_local, alpha_new = _sample_alpha_from_dirichlet_grid(
-            key_local, probs_col, alpha_c, ALPHA_CAT_A, ALPHA_CAT_B
+            key_local, probs_col, alpha_c, const.ALPHA_CAT_A, const.ALPHA_CAT_B
         )
         alpha_vec = alpha_vec.at[c_idx].set(alpha_new)
         return (key_local, alpha_vec), None
@@ -1162,8 +1155,8 @@ def run_gibbs_mcmc(
     alpha_view: float,
     alpha_cluster: float,
     cfg: GibbsConfig,
-    ng_alpha0: float = NG_ALPHA0,
-    ng_beta0: float = NG_BETA0,
+    ng_alpha0: float = const.NG_ALPHA0,
+    ng_beta0: float = const.NG_BETA0,
 ) -> GibbsState:
     """Trace-based MCMC driver.
 

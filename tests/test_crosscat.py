@@ -5,17 +5,7 @@ import time
 import jax
 import jax.numpy as jnp
 
-from crosscat import helpers
-from crosscat.constants import (
-    ALPHA_CLUSTER,
-    ALPHA_VIEW,
-    NUM_CAT_COLS,
-    NUM_CATEGORIES,
-    NUM_CLUSTERS,
-    NUM_CONT_COLS,
-    NUM_ROWS,
-    NUM_VIEWS,
-)
+from crosscat import constants as const, helpers
 from crosscat.gibbs import (
     GibbsConfig,
     gibbs_sweep,
@@ -39,22 +29,22 @@ def test_model_table_shapes():
     table_cont = retval["cont"]
     table_cat = retval["cat"]
 
-    assert table_cont.shape == (NUM_ROWS, NUM_CONT_COLS)
-    assert table_cat.shape == (NUM_ROWS, NUM_CAT_COLS)
+    assert table_cont.shape == (const.NUM_ROWS, const.NUM_CONT_COLS)
+    assert table_cat.shape == (const.NUM_ROWS, const.NUM_CAT_COLS)
 
-    total_cols = NUM_CONT_COLS + NUM_CAT_COLS
+    total_cols = const.NUM_CONT_COLS + const.NUM_CAT_COLS
     view_idx = choices["views", "view_idx"]
     assert view_idx.shape == (total_cols,)
     assert jnp.all(view_idx >= 0)
-    assert jnp.all(view_idx < NUM_VIEWS)
+    assert jnp.all(view_idx < const.NUM_VIEWS)
 
     row_clusters = choices["row_clusters", "idx"]
-    assert row_clusters.shape == (NUM_VIEWS, NUM_ROWS)
+    assert row_clusters.shape == (const.NUM_VIEWS, const.NUM_ROWS)
     assert jnp.all(row_clusters >= 0)
-    assert jnp.all(row_clusters < NUM_CLUSTERS)
+    assert jnp.all(row_clusters < const.NUM_CLUSTERS)
 
     assert jnp.all(table_cat >= 0)
-    assert jnp.all(table_cat < NUM_CATEGORIES)
+    assert jnp.all(table_cat < const.NUM_CATEGORIES)
 
 def test_update_row_and_column_gibbs_preserves_observations():
     key = jax.random.key(10)
@@ -109,8 +99,8 @@ def test_gibbs_sweep_preserves_observations_and_shapes():
     original_cont = original_choices["rows_cont"]
     original_cat = original_retval["cat"]
 
-    alpha_view = ALPHA_VIEW
-    alpha_cluster = ALPHA_CLUSTER
+    alpha_view = const.ALPHA_VIEW
+    alpha_cluster = const.ALPHA_CLUSTER
     (
         mu0_vec,
         kappa0_vec,
@@ -148,10 +138,10 @@ def test_gibbs_sweep_preserves_observations_and_shapes():
     assert jnp.allclose(updated_cont, original_cont)
     assert jnp.allclose(updated_cat, original_cat)
 
-    total_cols = NUM_CONT_COLS + NUM_CAT_COLS
+    total_cols = const.NUM_CONT_COLS + const.NUM_CAT_COLS
     assert updated_choices["views", "view_idx"].shape == (total_cols,)
     row_clusters = updated_choices["row_clusters", "idx"]
-    assert row_clusters.shape == (NUM_VIEWS, NUM_ROWS)
+    assert row_clusters.shape == (const.NUM_VIEWS, const.NUM_ROWS)
 
     assert alpha_view_new > 0.0
     assert alpha_cluster_new > 0.0
@@ -167,8 +157,8 @@ def test_run_gibbs_multiple_iterations_preserves_observations():
     original_cont = original_choices["rows_cont"]
     original_cat = original_retval["cat"]
 
-    alpha_view = ALPHA_VIEW
-    alpha_cluster = ALPHA_CLUSTER
+    alpha_view = const.ALPHA_VIEW
+    alpha_cluster = const.ALPHA_CLUSTER
     cfg = GibbsConfig(num_iters=5)
 
     key, subkey = jax.random.split(key)
@@ -197,8 +187,8 @@ def test_run_gibbs_mcmc_jit_preserves_observations():
     original_cont = original_choices["rows_cont"]
     original_cat = original_retval["cat"]
 
-    alpha_view = ALPHA_VIEW
-    alpha_cluster = ALPHA_CLUSTER
+    alpha_view = const.ALPHA_VIEW
+    alpha_cluster = const.ALPHA_CLUSTER
     cfg = GibbsConfig(num_iters=5)
 
     key, subkey = jax.random.split(key)
@@ -311,8 +301,8 @@ def test_timing_gibbs_sweep_jit():
     # Set up posterior as in other tests.
     posterior_trace, observed_cont, observed_cat = _simulate_posterior_trace(key)
 
-    alpha_view = ALPHA_VIEW
-    alpha_cluster = ALPHA_CLUSTER
+    alpha_view = const.ALPHA_VIEW
+    alpha_cluster = const.ALPHA_CLUSTER
     (
         mu0_vec,
         kappa0_vec,
@@ -436,7 +426,7 @@ def test_helper_posteriors_and_gibbs_wrappers():
         "[helpers] posterior rows_cont[0]:",
         jnp.asarray(helper_choices["rows_cont"])[0],
     )
-    if NUM_CAT_COLS > 0:
+    if const.NUM_CAT_COLS > 0:
         print(
             "[helpers] posterior cat row0:",
             jnp.asarray(helper_retval["cat"])[0],
@@ -458,10 +448,10 @@ def test_helper_predictive_and_impute_samples():
     posterior_trace, observed_cont, observed_cat = _simulate_posterior_trace(key)
 
     queries: list[tuple[int, int]] = []
-    if NUM_CONT_COLS > 0:
+    if const.NUM_CONT_COLS > 0:
         queries.append((0, 0))
-    if NUM_CAT_COLS > 0:
-        queries.append((0, NUM_CONT_COLS))
+    if const.NUM_CAT_COLS > 0:
+        queries.append((0, const.NUM_CONT_COLS))
 
     key, samples = helpers.predictive_samples(
         posterior_trace,
@@ -472,11 +462,11 @@ def test_helper_predictive_and_impute_samples():
     assert samples.shape == (5, len(queries))
     print("[helpers] predictive samples:", samples)
 
-    if NUM_CAT_COLS > 0:
+    if const.NUM_CAT_COLS > 0:
         cat_draws = samples[:, -1]
         assert jnp.all(cat_draws >= 0)
-        assert jnp.all(cat_draws < NUM_CATEGORIES)
-    if NUM_CONT_COLS > 0:
+        assert jnp.all(cat_draws < const.NUM_CATEGORIES)
+    if const.NUM_CONT_COLS > 0:
         assert jnp.var(samples[:, 0]) > 0.0
 
     key, imputations = helpers.impute(

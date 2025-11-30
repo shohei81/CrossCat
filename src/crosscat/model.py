@@ -8,40 +8,20 @@ from jax import jit
 from genjax import beta, categorical, dirichlet, gen, normal, gamma  # type: ignore
 from genjax._src.core.pytree import Const
 
-from .constants import (
-    ALPHA_CAT,
-    ALPHA_CAT_A,
-    ALPHA_CAT_B,
-    ALPHA_CLUSTER,
-    ALPHA_VIEW,
-    MU0_PRIOR_MEAN,
-    MU0_PRIOR_VAR,
-    KAPPA0_A,
-    KAPPA0_B,
-    NG_ALPHA0_A,
-    NG_ALPHA0_B,
-    NG_BETA0_A,
-    NG_BETA0_B,
-    NUM_CATEGORIES,
-    NUM_CAT_COLS,
-    NUM_CLUSTERS,
-    NUM_CONT_COLS,
-    NUM_ROWS,
-    NUM_VIEWS,
-)
+from . import constants as const
 
 
 def _default_args():
     """Default argument tuple for mixed_sbp_multiview_table."""
     return (
-        Const(NUM_ROWS),
-        Const(NUM_CONT_COLS),
-        Const(NUM_CAT_COLS),
-        Const(NUM_VIEWS),
-        Const(NUM_CLUSTERS),
-        ALPHA_VIEW,
-        ALPHA_CLUSTER,
-        ALPHA_CAT,
+        Const(const.NUM_ROWS),
+        Const(const.NUM_CONT_COLS),
+        Const(const.NUM_CAT_COLS),
+        Const(const.NUM_VIEWS),
+        Const(const.NUM_CLUSTERS),
+        const.ALPHA_VIEW,
+        const.ALPHA_CLUSTER,
+        const.ALPHA_CAT,
     )
 
 
@@ -72,16 +52,16 @@ def sbp_column_views(  # type: ignore
 
 @gen
 def cont_column_hyperparams():  # type: ignore
-    mu0 = normal(MU0_PRIOR_MEAN, MU0_PRIOR_VAR) @ ("mu0",)
-    kappa0 = gamma(KAPPA0_A, KAPPA0_B) @ ("kappa0",)
-    alpha0 = gamma(NG_ALPHA0_A, NG_ALPHA0_B) @ ("alpha0",)
-    beta0 = gamma(NG_BETA0_A, NG_BETA0_B) @ ("beta0",)
+    mu0 = normal(const.MU0_PRIOR_MEAN, const.MU0_PRIOR_VAR) @ ("mu0",)
+    kappa0 = gamma(const.KAPPA0_A, const.KAPPA0_B) @ ("kappa0",)
+    alpha0 = gamma(const.NG_ALPHA0_A, const.NG_ALPHA0_B) @ ("alpha0",)
+    beta0 = gamma(const.NG_BETA0_A, const.NG_BETA0_B) @ ("beta0",)
     return {"mu0": mu0, "kappa0": kappa0, "alpha0": alpha0, "beta0": beta0}
 
 
 @gen
 def cat_column_hyperparams():  # type: ignore
-    alpha_cat = gamma(ALPHA_CAT_A, ALPHA_CAT_B) @ ("alpha_cat",)
+    alpha_cat = gamma(const.ALPHA_CAT_A, const.ALPHA_CAT_B) @ ("alpha_cat",)
     return {"alpha_cat": alpha_cat}
 
 
@@ -190,12 +170,12 @@ def mixed_sbp_multiview_table(  # type: ignore
 
     cat_params_flat = (
         cluster_cat_params.repeat(n=num_views * num_clusters)(
-            alpha_cat_vec, n_cat_cols, Const(NUM_CATEGORIES)
+            alpha_cat_vec, n_cat_cols, Const(const.NUM_CATEGORIES)
         )
         @ ("clusters_cat",)
     )
     cat_params = cat_params_flat["probs"].reshape(
-        (num_views, num_clusters, num_cat_cols, NUM_CATEGORIES)
+        (num_views, num_clusters, num_cat_cols, const.NUM_CATEGORIES)
     )
 
     logits_clusters = jnp.log(cluster_weights + 1e-20)
