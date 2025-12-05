@@ -12,11 +12,11 @@ services:
     working_dir: /workspaces/crosscat
     command: ["bash"]
 
-  legacy:
+  original:
     build:
       context: ..
-      dockerfile: docker/legacy/Dockerfile
-    image: crosscat-legacy:latest
+      dockerfile: docker/original/Dockerfile
+    image: crosscat-original:latest
     volumes:
       - ..:/workspaces/crosscat:cached
     working_dir: /workspaces/crosscat
