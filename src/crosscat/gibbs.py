@@ -41,214 +41,147 @@ def _sbp_weights_from_v(v: jnp.ndarray) -> jnp.ndarray:
 def gibbs_update_row_clusters(
     key,
     trace,
-    mu0_vec: jax.Array,
-    kappa0_vec: jax.Array,
-    ng_alpha0: jax.Array,
-    ng_beta0: jax.Array,
-    alpha_cat_vec: jax.Array,
+    # 以下の十分統計量(mu0_vecなど)はUncollapsedでは直接使いませんが
+    # 引数インターフェースを変えないならそのままでもOKです。
+    # 代わりに、Traceから現在のクラスタパラメータを取得します。
+    *args, 
 ):
-    """Gibbs update for row cluster assignments in this model."""
-    args = trace.get_args()
-    n_rows = args[0].unwrap()
-    n_cont_cols = args[1].unwrap()
-    n_cat_cols = args[2].unwrap()
-    n_views = args[3].unwrap()
-    n_clusters = args[4].unwrap()
+    """
+    Blocked Gibbs update for row cluster assignments.
+    Collapsed (積分消去) ではなく、現在のクラスタパラメータ theta を条件として
+    全行を一括並列更新 (vmap) します。
+    """
+    args_trace = trace.get_args()
+    n_rows = args_trace[0].unwrap()
+    n_cont_cols = args_trace[1].unwrap()
+    n_cat_cols = args_trace[2].unwrap()
+    n_views = args_trace[3].unwrap()
+    n_clusters = args_trace[4].unwrap()
 
     choices = trace.get_choices()
     retval = trace.get_retval()
 
+    # --- 1. データの取得 ---
     rows_cont = choices["rows_cont"]  # (n_rows, n_cont_cols)
-    rows_cat = retval["cat"]  # (n_rows, n_cat_cols)
+    rows_cat = retval["cat"]          # (n_rows, n_cat_cols)
 
-    view_idx = choices["views", "view_idx"]  # (n_cont_cols + n_cat_cols,)
+    # --- 2. 現在のパラメータ(theta)の取得 ---
+    # これがあるのが Uncollapsed の特徴です
+    
+    # クラスタ重み (n_views, n_clusters)
+    v_cluster = choices["cluster_weights", "v"]
+    weights_all = jax.vmap(_sbp_weights_from_v)(v_cluster)
+
+    # 連続変数のパラメータ (n_views, n_clusters, n_cont_cols)
+    if n_cont_cols > 0:
+        mus = choices["clusters_cont", "mean"].reshape(n_views, n_clusters, n_cont_cols)
+        taus = choices["clusters_cont", "tau"].reshape(n_views, n_clusters, n_cont_cols)
+    else:
+        mus = None
+        taus = None
+
+    # カテゴリ変数のパラメータ (n_views, n_clusters, n_cat_cols, n_categories)
+    if n_cat_cols > 0:
+        probs = choices["clusters_cat", "probs"].reshape(
+            n_views, n_clusters, n_cat_cols, const.NUM_CATEGORIES
+        )
+    else:
+        probs = None
+
+    # View割り当て (n_cols,)
+    view_idx = choices["views", "view_idx"]
     view_idx_cont = view_idx[:n_cont_cols]
     view_idx_cat = view_idx[n_cont_cols:]
 
-    # Build collapsed categorical sufficient statistics from the current row_clusters.
-    row_clusters = choices["row_clusters", "idx"]  # (n_views, n_rows)
-    v_cluster = choices["cluster_weights", "v"]  # (n_views, n_clusters-1)
-
-    # ===== Prepare per-view masks and weights =====
-    views_arange = jnp.arange(n_views)[:, None]  # (n_views, 1)
-
-    # (n_views, n_cont_cols): whether view v owns continuous column j
-    mask_cont_all = (views_arange == view_idx_cont[None, :]).astype(jnp.float32)
-
-    # (n_views, n_cat_cols): whether view v owns categorical column j
-    # If n_cat_cols == 0, this becomes (n_views, 0) and contributes zero downstream.
+    # --- 3. Viewごとのマスク作成 ---
+    views_arange = jnp.arange(n_views)[:, None]
+    mask_cont = (views_arange == view_idx_cont[None, :]) # (n_views, n_cont_cols)
     if n_cat_cols > 0:
-        mask_cat_all = (views_arange == view_idx_cat[None, :]).astype(jnp.float32)
+        mask_cat = (views_arange == view_idx_cat[None, :])   # (n_views, n_cat_cols)
     else:
-        mask_cat_all = jnp.zeros((n_views, 0), dtype=jnp.float32)
+        mask_cat = jnp.zeros((n_views, 0), dtype=bool)
 
-    # SBP weights w_v for each view (n_views, n_clusters).
-    weights_all = jax.vmap(_sbp_weights_from_v)(v_cluster)
+    # --- 4. 並列計算ロジック (vmap over views) ---
+    
+    # 1つのViewについて、全行・全クラスタの対数尤度を計算する関数
+    def _compute_logits_one_view(
+        weights_v, # (n_clusters,)
+        mus_v,     # (n_clusters, n_cont_cols) 
+        taus_v,    # (n_clusters, n_cont_cols)
+        probs_v,   # (n_clusters, n_cat_cols, n_cats)
+        mask_cont_v, # (n_cont_cols,)
+        mask_cat_v,  # (n_cat_cols,)
+    ):
+        # 連続変数の対数尤度: Sum over columns (masked)
+        # rows_cont: (n_rows, n_cont)
+        # mus_v: (n_clusters, n_cont)
+        # logpdf: (n_rows, n_clusters, n_cont) -> sum -> (n_rows, n_clusters)
+        if n_cont_cols > 0:
+            # ブロードキャスト: (n_rows, 1, n_cont) vs (1, n_clusters, n_cont)
+            diff = rows_cont[:, None, :] - mus_v[None, :, :]
+            # Normal log-pdf: 0.5 * (log(tau) - log(2pi) - tau * diff^2)
+            log_pdf_cont = 0.5 * (jnp.log(jnp.clip(taus_v, 1e-20)) - jnp.log(2 * jnp.pi) - taus_v * diff**2)
+            # マスクされている列だけ足す
+            log_lik_cont = jnp.sum(log_pdf_cont * mask_cont_v[None, None, :], axis=2)
+        else:
+            log_lik_cont = jnp.zeros((n_rows, n_clusters))
 
-    # RNG keys for each view.
-    key, subkey_views = jax.random.split(key)
-    keys_v = jax.random.split(subkey_views, n_views)  # (n_views,)
+        # カテゴリ変数の対数尤度
+        if n_cat_cols > 0:
+            # rows_cat: (n_rows, n_cat) -> 値自体がインデックス
+            # probs_v: (n_clusters, n_cat, n_vocab)
+            
+            # 各行・各列がどの確率値を使うかを取得
+            # jax.vmap等を使っても良いですが、take_along_axis的な処理が必要です。
+            # ここでは簡易的に、OneHot的な計算あるいはgatherを行うイメージです。
+            
+            # (n_rows, 1, n_cat, 1)
+            row_vals_exp = rows_cat[:, None, :, None].astype(jnp.int32)
+            
+            # (1, n_clusters, n_cat, n_vocab) -> take -> (n_rows, n_clusters, n_cat, 1)
+            selected_probs = jnp.take_along_axis(
+                probs_v[None, ...], row_vals_exp, axis=3
+            ).squeeze(-1)
+            
+            log_pdf_cat = jnp.log(jnp.clip(selected_probs, 1e-20))
+            log_lik_cat = jnp.sum(log_pdf_cat * mask_cat_v[None, None, :], axis=2)
+        else:
+            log_lik_cat = jnp.zeros((n_rows, n_clusters))
+            
+        # 事前分布 (log weights)
+        log_prior = jnp.log(jnp.clip(weights_v, 1e-20)) # (n_clusters,)
+        
+        # 合計対数尤度 (n_rows, n_clusters)
+        logits = log_lik_cont + log_lik_cat + log_prior[None, :]
+        return logits
 
-    # ===== Define a kernel that updates row_clusters for a single view =====
-    def _update_rows_one_view(
-        key_v: jax.Array,
-        weights_v: jax.Array,  # (n_clusters,)
-        mask_cont_v: jax.Array,  # (n_cont_cols,)
-        mask_cat_v: jax.Array,  # (n_cat_cols,)
-        row_clusters_v: jax.Array,  # (n_rows,)
-        alpha_cat_vec_full: jax.Array,  # (n_cat_cols,)
-    ) -> jax.Array:
-        """Collapsed Gibbs updates for one view's row clusters."""
-
-        # Continuous sufficient statistics per (cluster, cont_col) under current z.
-        masked_cont = rows_cont * mask_cont_v[None, :]  # (n_rows, n_cont_cols)
-        one_hot = jax.nn.one_hot(
-            row_clusters_v, n_clusters, dtype=jnp.float32
-        )  # (n_rows, n_clusters)
-        n_k = jnp.sum(one_hot, axis=0)  # (n_clusters,)
-        sum_y = jnp.einsum("rn,rc->nc", one_hot, masked_cont)  # (n_clusters, n_cont)
-        sumsq_y = jnp.einsum(
-            "rn,rc->nc", one_hot, masked_cont**2
-        )  # (n_clusters, n_cont)
-
-        # Initial categorical counts (cluster, column, category).
-        y_all = rows_cat.astype(jnp.int32)  # (n_rows, n_cat_cols)
-        idx_flat = (
-            row_clusters_v[:, None] * (n_cat_cols * const.NUM_CATEGORIES)
-            + jnp.arange(n_cat_cols)[None, :] * const.NUM_CATEGORIES
-            + y_all
-        )
-        counts_flat = jnp.bincount(
-            idx_flat.reshape(-1),
-            length=n_clusters * n_cat_cols * const.NUM_CATEGORIES,
-            minlength=n_clusters * n_cat_cols * const.NUM_CATEGORIES,
-        ).astype(jnp.int32)
-        counts_cat = counts_flat.reshape((n_clusters, n_cat_cols, const.NUM_CATEGORIES))
-
-        def one_row(carry, r_idx):
-            key_local, row_clusters_curr, counts_curr, n_k_curr, sum_y_curr, sumsq_y_curr = carry
-
-            # Continuous part: Student-t predictive log-likelihood from Normal-Gamma.
-            x_r_cont = rows_cont[r_idx] * mask_cont_v  # (n_cont_cols,)
-            old_k = row_clusters_curr[r_idx]
-
-            one_hot_old = jax.nn.one_hot(
-                old_k, n_clusters, dtype=jnp.float32
-            )  # (n_clusters,)
-            n_minus = n_k_curr - one_hot_old  # (n_clusters,)
-            sum_y_minus = sum_y_curr - one_hot_old[:, None] * x_r_cont[None, :]
-            sumsq_y_minus = sumsq_y_curr - one_hot_old[:, None] * (
-                x_r_cont**2
-            )[None, :]
-
-            if n_cont_cols > 0:
-                y_new_mat = jnp.broadcast_to(
-                    x_r_cont[None, :], sum_y_minus.shape
-                )  # (n_clusters, n_cont_cols)
-                n_broadcast = jnp.broadcast_to(
-                    n_minus[:, None], sum_y_minus.shape
-                )
-                log_pred_mat = _normal_gamma_predictive_loglik_from_stats(
-                    n_broadcast,
-                    sum_y_minus,
-                    sumsq_y_minus,
-                    y_new_mat,
-                    mu0_vec,
-                    kappa0_vec,
-                    ng_alpha0,
-                    ng_beta0,
-                )  # (n_clusters, n_cont_cols)
-                loglik_cont = jnp.sum(
-                    log_pred_mat * mask_cont_v[None, :], axis=1
-                )  # (n_clusters,)
-            else:
-                loglik_cont = jnp.zeros((n_clusters,))
-
-            # Categorical part (collapsed Dirichlet-Multinomial).
-            counts_minus = counts_curr
-            y_r = jnp.zeros((n_cat_cols,), dtype=jnp.int32)
-            if n_cat_cols > 0:
-                y_r = rows_cat[r_idx].astype(jnp.int32)  # (n_cat_cols,)
-                old_k = row_clusters_curr[r_idx]
-
-                # Temporarily remove the contribution of row r.
-                counts_minus = counts_minus.at[
-                    old_k, jnp.arange(n_cat_cols), y_r
-                ].add(-1)
-
-                counts_k = counts_minus  # (n_clusters, n_cat_cols, const.NUM_CATEGORIES)
-                n_sum = jnp.sum(counts_k, axis=2)  # (n_clusters, n_cat_cols)
-
-                y_idx = y_r[None, :, None]  # (1, n_cat_cols, 1)
-                counts_y = jnp.take_along_axis(counts_k, y_idx, axis=2)[
-                    :, :, 0
-                ]  # (n_clusters, n_cat_cols)
-
-                alpha_c = alpha_cat_vec_full  # (n_cat_cols,)
-                numer = alpha_c[None, :] + counts_y
-                denom = alpha_c[None, :] * const.NUM_CATEGORIES + n_sum
-
-                loglik_cat_mat = jnp.log(jnp.clip(numer, 1e-20, jnp.inf)) - jnp.log(
-                    jnp.clip(denom, 1e-20, jnp.inf)
-                )
-                loglik_cat = jnp.sum(loglik_cat_mat * mask_cat_v[None, :], axis=1)
-            else:
-                loglik_cat = jnp.zeros((n_clusters,))
-
-            # prior + likelihood
-            log_prior = jnp.log(jnp.clip(weights_v, 1e-20, jnp.inf))
-            logits = loglik_cont + loglik_cat + log_prior
-
-            key_local, subkey = jax.random.split(key_local)
-            new_k = jax.random.categorical(subkey, logits)
-
-            # Add the new cluster assignment back into counts.
-            counts_new = counts_minus.at[new_k, jnp.arange(n_cat_cols), y_r].add(1)
-            row_clusters_curr = row_clusters_curr.at[r_idx].set(new_k)
-            one_hot_new = jax.nn.one_hot(
-                new_k, n_clusters, dtype=jnp.float32
-            )  # (n_clusters,)
-            n_k_new = n_minus + one_hot_new
-            sum_y_new = sum_y_minus + one_hot_new[:, None] * x_r_cont[None, :]
-            sumsq_y_new = sumsq_y_minus + one_hot_new[:, None] * (
-                x_r_cont**2
-            )[None, :]
-
-            return (
-                key_local,
-                row_clusters_curr,
-                counts_new,
-                n_k_new,
-                sum_y_new,
-                sumsq_y_new,
-            ), None
-
-        init = (key_v, row_clusters_v, counts_cat, n_k, sum_y, sumsq_y)
-        (key_v_out, row_clusters_new, _, _, _, _), _ = lax.scan(
-            one_row, init, jnp.arange(n_rows)
-        )
-        return row_clusters_new
-
-    # Use vmap over views; each view runs its own scan over rows.
-    new_row_clusters = jax.vmap(
-        _update_rows_one_view,
-        in_axes=(0, 0, 0, 0, 0, None),
-        out_axes=0,
+    # vmapで全View一括計算
+    # mus, taus, probs はView次元(0軸)を持つので、そのままマップされます
+    logits_all_views = jax.vmap(
+        _compute_logits_one_view,
+        in_axes=(0, 0, 0, 0, 0, 0)
     )(
-        keys_v,
         weights_all,
-        mask_cont_all,
-        mask_cat_all,
-        row_clusters,
-        alpha_cat_vec,
+        mus if mus is not None else jnp.zeros((n_views, n_clusters, 0)),
+        taus if taus is not None else jnp.zeros((n_views, n_clusters, 0)),
+        probs if probs is not None else jnp.zeros((n_views, n_clusters, 0, 0)),
+        mask_cont,
+        mask_cat
     )
-    # new_row_clusters: (n_views, n_rows)
+    # logits_all_views: (n_views, n_rows, n_clusters)
 
-    # Apply the updated row clusters back to the GenJAX trace.
-    cm = C["row_clusters", "idx"].set(new_row_clusters)
+    # --- 5. サンプリング ---
+    key, subkey = jax.random.split(key)
+    # 全View, 全Rowを一括サンプリング
+    new_row_clusters = jax.random.categorical(subkey, logits_all_views, axis=2)
+    # (n_views, n_rows)
+
+    # --- 6. Traceの更新 ---
+    cm = C["row_clusters", "idx"].set(new_row_clusters.astype(jnp.int32))
     argdiffs = genjax.Diff.no_change(trace.args)
     key, subkey_update = jax.random.split(key)
     new_trace, _, _, _ = jitted_update(subkey_update, trace, cm, argdiffs)
+    
     return key, new_trace
 
 

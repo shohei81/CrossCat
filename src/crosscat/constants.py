@@ -1,5 +1,6 @@
 """Model- and sampler-wide constants for the CrossCat experiments."""
 
+# Default dimensionalities are overwritten by dataset-specific loaders.
 NUM_ROWS = 10
 NUM_CONT_COLS = 1
 NUM_CAT_COLS = 1

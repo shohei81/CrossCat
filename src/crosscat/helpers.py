@@ -1,7 +1,8 @@
-"""Helper wrappers that mimic a small subset of the legacy LocalEngine API."""
+"""Helper wrappers that mimic a small subset of the original LocalEngine API."""
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import jax
@@ -27,6 +28,7 @@ def posterior_from_observations(
     return infer_mixed_sbp_multiview_table(observed_cont, observed_cat, key=key)
 
 
+@partial(jax.jit, static_argnames=["num_iters"])
 def run_gibbs_iterations(
     trace,
     *,

@@ -54,7 +54,6 @@ TARGET_COLUMN = "income"
 LABEL_MAPPING = {"<=50K": 0, ">50K": 1}
 NORMALIZATION_EPS = 1e-8
 
-
 @dataclass
 class PreprocessedAdultData:
     """Container describing the processed Adult dataset."""
@@ -155,11 +154,18 @@ def _read_raw_adult_frames(data_dir: Path) -> List[pd.DataFrame]:
     return frames
 
 
-def _clean_dataframe(df: pd.DataFrame, *, drop_missing: bool) -> pd.DataFrame:
+def _clean_dataframe(
+    df: pd.DataFrame,
+    *,
+    drop_missing: bool,
+    categorical_columns: Sequence[str],
+) -> pd.DataFrame:
     clean_df = df.copy()
     clean_df[TARGET_COLUMN] = (
         clean_df[TARGET_COLUMN].astype(str).str.strip().str.replace(".", "", regex=False)
     )
+    for col in dict.fromkeys(categorical_columns):
+        clean_df[col] = clean_df[col].astype(str).str.strip()
     if drop_missing:
         clean_df = clean_df.dropna()
     return clean_df.reset_index(drop=True)
@@ -172,16 +178,27 @@ def load_adult_dataset(
     normalize: bool = True,
     continuous_columns: Sequence[str] | None = None,
     categorical_columns: Sequence[str] | None = None,
+    include_target_as_categorical: bool = False,
+    max_rows: int | None = None,
 ) -> PreprocessedAdultData:
     """Load, clean, and encode the Adult dataset as numpy/JAX arrays."""
 
     data_path = Path(data_dir)
     cont_cols = list(continuous_columns or CONTINUOUS_COLUMNS)
     cat_cols = list(categorical_columns or CATEGORICAL_COLUMNS)
+    cat_cols_with_target = list(cat_cols)
+    if include_target_as_categorical and TARGET_COLUMN not in cat_cols_with_target:
+        cat_cols_with_target.append(TARGET_COLUMN)
 
     frames = _read_raw_adult_frames(data_path)
     merged = pd.concat(frames, axis=0, ignore_index=True)
-    merged = _clean_dataframe(merged, drop_missing=drop_missing)
+    merged = _clean_dataframe(
+        merged,
+        drop_missing=drop_missing,
+        categorical_columns=cat_cols_with_target + [TARGET_COLUMN],
+    )
+    if max_rows is not None:
+        merged = merged.head(max_rows)
 
     cont_matrix = merged[cont_cols].to_numpy(dtype=np.float32)
     scaler = AdultScaler()
@@ -193,8 +210,8 @@ def load_adult_dataset(
         normalized_cont = cont_matrix
 
     encoder = AdultCategoricalEncoder()
-    cat_df = merged[cat_cols]
-    encoder.fit(cat_df, cat_cols)
+    cat_df = merged[cat_cols_with_target]
+    encoder.fit(cat_df, cat_cols_with_target)
     cat_matrix = encoder.transform(cat_df)
 
     labels = (
@@ -213,12 +230,41 @@ def load_adult_dataset(
         observed_cat=observed_cat,
         labels=label_array,
         continuous_columns=cont_cols,
-        categorical_columns=cat_cols,
+        categorical_columns=cat_cols_with_target,
         label_mapping=LABEL_MAPPING,
         cont_means=scaler.means.copy(),
         cont_stds=scaler.stds.copy(),
         categorical_vocabs=encoder.vocab,
     )
+
+
+def build_crosscat_rows(
+    data: PreprocessedAdultData,
+) -> tuple[list[list], list[str], list[str]]:
+    """Prepare normalized rows and metadata for the original crosscat API."""
+    cont_values = np.asarray(data.observed_cont)
+    num_rows = cont_values.shape[0]
+    cat_cols = list(data.categorical_columns)
+    if cat_cols:
+        cat_df = data.dataframe[cat_cols].copy()
+        for col in cat_cols:
+            cat_df[col] = cat_df[col].astype(str).str.strip()
+        cat_values = cat_df.to_numpy(dtype=object)
+    else:
+        cat_values = np.zeros((num_rows, 0), dtype=object)
+
+    rows: list[list] = []
+    for idx in range(num_rows):
+        row = cont_values[idx].astype(float).tolist()
+        if cat_cols:
+            row.extend(cat_values[idx].tolist())
+        rows.append(row)
+
+    column_names = list(data.continuous_columns) + cat_cols
+    cctypes = ["continuous"] * len(data.continuous_columns) + [
+        "multinomial"
+    ] * len(cat_cols)
+    return rows, column_names, cctypes
 
 
 def summarize_dataset(data: PreprocessedAdultData) -> str:
