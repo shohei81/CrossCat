@@ -1,5 +1,5 @@
 services:
-  genjax:
+  genjax_cpu:
     build:
       context: ..
       dockerfile: docker/genjax/Dockerfile
@@ -9,8 +9,21 @@ services:
     volumes:
       - ..:/workspaces/crosscat:cached
       - genjax-uv-cache:/root/.cache/uv
+      - ../experiments/artifacts:/workspaces/crosscat/experiments/artifacts
     working_dir: /workspaces/crosscat
     command: ["bash"]
+
+  genjax_gpu:
+    extends:
+      service: genjax_cpu
+    environment:
+      - JAX_PLATFORM_NAME=gpu
+    # Enable the following if GPU runtime is available:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - capabilities: [gpu]
 
   original:
     build:
@@ -19,6 +32,7 @@ services:
     image: crosscat-original:latest
     volumes:
       - ..:/workspaces/crosscat:cached
+      - ../experiments/artifacts:/workspaces/crosscat/experiments/artifacts
     working_dir: /workspaces/crosscat
     command: ["bash"]
 
