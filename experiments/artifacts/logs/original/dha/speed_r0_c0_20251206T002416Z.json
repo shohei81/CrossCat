@@ -1,0 +1,25 @@
+{
+  "cols": 0, 
+  "dataset": "dha", 
+  "env": {
+    "platform": "cpu"
+  }, 
+  "mode": "speed", 
+  "model": "original", 
+  "note": "TODO: replace stub runner with actual Original implementation", 
+  "notes": {
+    "original_error": "read_model_data_from_csv failed: list index out of range"
+  }, 
+  "params": {
+    "iterations": 500, 
+    "likelihood_interval": 10, 
+    "n_grid": 100, 
+    "seed": 0
+  }, 
+  "results": {
+    "avg_time_per_iter_sec": null, 
+    "compilation_time_sec": null, 
+    "total_time_sec": null
+  }, 
+  "rows": 0
+}

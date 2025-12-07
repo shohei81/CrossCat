@@ -1,0 +1,274 @@
+{
+  "artifacts": [
+    {
+      "base": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/dha/dha_full.csv",
+      "cols": 64,
+      "mask": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/dha/dha_full_mask.csv",
+      "masked": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/dha/dha_full_masked.csv",
+      "missing_fraction": 0.1,
+      "rows": 307
+    }
+  ],
+  "cols": 64,
+  "columns": [
+    {
+      "kind": "categorical",
+      "name": "NAME"
+    },
+    {
+      "kind": "continuous",
+      "name": "N_DEATH_ILL"
+    },
+    {
+      "kind": "continuous",
+      "name": "TTL_MDCR_SPND"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_INP"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_OUTP"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_LTC"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_HOME"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_HSPC"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_AMBLNC"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_EQP"
+    },
+    {
+      "kind": "continuous",
+      "name": "MDCR_SPND_OTHER"
+    },
+    {
+      "kind": "continuous",
+      "name": "TTL_PARTB"
+    },
+    {
+      "kind": "continuous",
+      "name": "PARTB_EVAL_MGMT"
+    },
+    {
+      "kind": "continuous",
+      "name": "PARTB_PROCS"
+    },
+    {
+      "kind": "continuous",
+      "name": "PARTB_IMAG"
+    },
+    {
+      "kind": "continuous",
+      "name": "PARTB_TESTS"
+    },
+    {
+      "kind": "continuous",
+      "name": "PARTB_OTHER"
+    },
+    {
+      "kind": "continuous",
+      "name": "HOSP_REIMB_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "HOSP_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "REIMB_P_PTNT_DAY"
+    },
+    {
+      "kind": "continuous",
+      "name": "HOSP_REIMB_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "HOSP_DAY_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "REIMB_P_DAY_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "MD_PYMT_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "MD_VISIT_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "PYMT_P_MD_VISIT"
+    },
+    {
+      "kind": "continuous",
+      "name": "MD_VISIT_PYMT_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "MD_VISIT_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "PYMT_P_VISIT_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "HOSP_BEDS"
+    },
+    {
+      "kind": "continuous",
+      "name": "TTL_IC_BEDS"
+    },
+    {
+      "kind": "continuous",
+      "name": "HI_IC_BEDS"
+    },
+    {
+      "kind": "continuous",
+      "name": "INT_IC_BEDS"
+    },
+    {
+      "kind": "continuous",
+      "name": "MED_SURG_BEDS"
+    },
+    {
+      "kind": "continuous",
+      "name": "SNF_BEDS"
+    },
+    {
+      "kind": "continuous",
+      "name": "TOTAL_FTE"
+    },
+    {
+      "kind": "continuous",
+      "name": "MS_FTE"
+    },
+    {
+      "kind": "continuous",
+      "name": "PC_FTE"
+    },
+    {
+      "kind": "continuous",
+      "name": "MS_PC_RATIO"
+    },
+    {
+      "kind": "continuous",
+      "name": "RNS_REQ"
+    },
+    {
+      "kind": "continuous",
+      "name": "HOSP_DAYS_P_DCD2"
+    },
+    {
+      "kind": "continuous",
+      "name": "TTL_IC_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "HI_IC_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "INT_IC_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "MED_SURG_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "SNF_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "TTL_MD_VISIT_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "MS_VISIT_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "PC_VISIT_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "MS_PC_RATIO_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "HHA_VISIT_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "PCT_DTHS_HOSP"
+    },
+    {
+      "kind": "continuous",
+      "name": "PCT_DTHS_W_ICU"
+    },
+    {
+      "kind": "continuous",
+      "name": "PCT_DTHS_HSPC"
+    },
+    {
+      "kind": "continuous",
+      "name": "HSPC_DAYS_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "PCT_PTNT_10_MD"
+    },
+    {
+      "kind": "continuous",
+      "name": "N_MD_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "TTL_COPAY_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "MD_COPAY_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "EQP_COPAY_P_DCD"
+    },
+    {
+      "kind": "continuous",
+      "name": "QUAL_SCORE"
+    },
+    {
+      "kind": "continuous",
+      "name": "AMI_SCORE"
+    },
+    {
+      "kind": "continuous",
+      "name": "CHF_SCORE"
+    },
+    {
+      "kind": "continuous",
+      "name": "PNEUM_SCORE"
+    }
+  ],
+  "dataset": "dha",
+  "rows": 307,
+  "source": "/Users/shohei/dev/CrossCat/data/dha.csv"
+}

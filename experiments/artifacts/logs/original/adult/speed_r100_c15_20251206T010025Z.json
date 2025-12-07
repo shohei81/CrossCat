@@ -1,0 +1,23 @@
+{
+  "cols": 15, 
+  "dataset": "adult", 
+  "env": {
+    "platform": "cpu"
+  }, 
+  "mode": "speed", 
+  "model": "original", 
+  "note": "Ran crosscat.LocalEngine.analyze successfully", 
+  "params": {
+    "iterations": 500, 
+    "likelihood_interval": 10, 
+    "n_grid": 100, 
+    "seed": 0
+  }, 
+  "results": {
+    "avg_time_per_iter_sec": 0.00496397590637207, 
+    "compilation_time_sec": null, 
+    "log_likelihood_history": [], 
+    "total_time_sec": 2.481987953186035
+  }, 
+  "rows": 100
+}

@@ -1,0 +1,23 @@
+{
+  "cols": 50, 
+  "dataset": "synthetic", 
+  "env": {
+    "platform": "cpu"
+  }, 
+  "mode": "speed", 
+  "model": "original", 
+  "note": "Ran crosscat.LocalEngine.analyze successfully", 
+  "params": {
+    "iterations": 200, 
+    "likelihood_interval": 10, 
+    "n_grid": 100, 
+    "seed": 0
+  }, 
+  "results": {
+    "avg_time_per_iter_sec": 0.10538206934928894, 
+    "compilation_time_sec": null, 
+    "log_likelihood_history": [], 
+    "total_time_sec": 21.076413869857788
+  }, 
+  "rows": 1000
+}

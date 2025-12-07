@@ -1,0 +1,217 @@
+{
+  "artifacts": [
+    {
+      "base": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/synthetic/synthetic_r2000_c50.csv",
+      "cols": 50,
+      "mask": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/synthetic/synthetic_r2000_c50_mask.csv",
+      "masked": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/synthetic/synthetic_r2000_c50_masked.csv",
+      "missing_fraction": 0.05,
+      "rows": 2000
+    }
+  ],
+  "cols": 50,
+  "columns": [
+    {
+      "kind": "continuous",
+      "name": "x1"
+    },
+    {
+      "kind": "continuous",
+      "name": "x2"
+    },
+    {
+      "kind": "continuous",
+      "name": "x3"
+    },
+    {
+      "kind": "continuous",
+      "name": "x4"
+    },
+    {
+      "kind": "continuous",
+      "name": "x5"
+    },
+    {
+      "kind": "continuous",
+      "name": "x6"
+    },
+    {
+      "kind": "continuous",
+      "name": "x7"
+    },
+    {
+      "kind": "continuous",
+      "name": "x8"
+    },
+    {
+      "kind": "continuous",
+      "name": "x9"
+    },
+    {
+      "kind": "continuous",
+      "name": "x10"
+    },
+    {
+      "kind": "continuous",
+      "name": "x11"
+    },
+    {
+      "kind": "continuous",
+      "name": "x12"
+    },
+    {
+      "kind": "continuous",
+      "name": "x13"
+    },
+    {
+      "kind": "continuous",
+      "name": "x14"
+    },
+    {
+      "kind": "continuous",
+      "name": "x15"
+    },
+    {
+      "kind": "continuous",
+      "name": "x16"
+    },
+    {
+      "kind": "continuous",
+      "name": "x17"
+    },
+    {
+      "kind": "continuous",
+      "name": "x18"
+    },
+    {
+      "kind": "continuous",
+      "name": "x19"
+    },
+    {
+      "kind": "continuous",
+      "name": "x20"
+    },
+    {
+      "kind": "continuous",
+      "name": "x21"
+    },
+    {
+      "kind": "continuous",
+      "name": "x22"
+    },
+    {
+      "kind": "continuous",
+      "name": "x23"
+    },
+    {
+      "kind": "continuous",
+      "name": "x24"
+    },
+    {
+      "kind": "continuous",
+      "name": "x25"
+    },
+    {
+      "kind": "continuous",
+      "name": "x26"
+    },
+    {
+      "kind": "continuous",
+      "name": "x27"
+    },
+    {
+      "kind": "continuous",
+      "name": "x28"
+    },
+    {
+      "kind": "continuous",
+      "name": "x29"
+    },
+    {
+      "kind": "continuous",
+      "name": "x30"
+    },
+    {
+      "kind": "continuous",
+      "name": "x31"
+    },
+    {
+      "kind": "continuous",
+      "name": "x32"
+    },
+    {
+      "kind": "continuous",
+      "name": "x33"
+    },
+    {
+      "kind": "continuous",
+      "name": "x34"
+    },
+    {
+      "kind": "continuous",
+      "name": "x35"
+    },
+    {
+      "kind": "continuous",
+      "name": "x36"
+    },
+    {
+      "kind": "continuous",
+      "name": "x37"
+    },
+    {
+      "kind": "continuous",
+      "name": "x38"
+    },
+    {
+      "kind": "continuous",
+      "name": "x39"
+    },
+    {
+      "kind": "continuous",
+      "name": "x40"
+    },
+    {
+      "kind": "continuous",
+      "name": "x41"
+    },
+    {
+      "kind": "continuous",
+      "name": "x42"
+    },
+    {
+      "kind": "continuous",
+      "name": "x43"
+    },
+    {
+      "kind": "continuous",
+      "name": "x44"
+    },
+    {
+      "kind": "continuous",
+      "name": "x45"
+    },
+    {
+      "kind": "continuous",
+      "name": "x46"
+    },
+    {
+      "kind": "continuous",
+      "name": "x47"
+    },
+    {
+      "kind": "continuous",
+      "name": "x48"
+    },
+    {
+      "kind": "continuous",
+      "name": "x49"
+    },
+    {
+      "kind": "continuous",
+      "name": "x50"
+    }
+  ],
+  "dataset": "synthetic",
+  "rows": 2000
+}
