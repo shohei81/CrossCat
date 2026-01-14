@@ -1,0 +1,32 @@
+{
+  "cols": 10,
+  "dataset": "synthetic",
+  "env": {
+    "platform": "cpu"
+  },
+  "mode": "speed",
+  "model": "genjax",
+  "notes": {
+    "categorical_mapping": {},
+    "overrides": {
+      "num_categories": null,
+      "num_clusters": null,
+      "num_views": null
+    }
+  },
+  "params": {
+    "iterations": 500,
+    "likelihood_interval": 10,
+    "n_grid": 100,
+    "num_categories": 2,
+    "num_clusters": 10,
+    "num_views": 5,
+    "seed": 0
+  },
+  "results": {
+    "avg_time_per_iter_sec": 0.021783529261999775,
+    "compilation_time_sec": 5.7373752949999925,
+    "total_time_sec": 10.891764630999887
+  },
+  "rows": 1000
+}

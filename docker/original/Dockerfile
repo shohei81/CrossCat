@@ -24,7 +24,9 @@ RUN apt-get update && \
         pkg-config \
         software-properties-common \
         python2.7 \
-        python2.7-dev && \
+        python2.7-dev \
+        python3 \
+        python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -sS https://bootstrap.pypa.io/pip/2.7/get-pip.py | python2.7

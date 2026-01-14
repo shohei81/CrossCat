@@ -1,0 +1,95 @@
+{
+  "artifacts": [
+    {
+      "base": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r100.csv",
+      "cols": 15,
+      "mask": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r100_mask.csv",
+      "masked": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r100_masked.csv",
+      "missing_fraction": 0.1,
+      "rows": 100
+    },
+    {
+      "base": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r1000.csv",
+      "cols": 15,
+      "mask": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r1000_mask.csv",
+      "masked": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r1000_masked.csv",
+      "missing_fraction": 0.1,
+      "rows": 1000
+    },
+    {
+      "base": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r10000.csv",
+      "cols": 15,
+      "mask": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r10000_mask.csv",
+      "masked": "/Users/shohei/dev/CrossCat/experiments/artifacts/processed/adult/adult_r10000_masked.csv",
+      "missing_fraction": 0.1,
+      "rows": 10000
+    }
+  ],
+  "cols": 15,
+  "columns": [
+    {
+      "kind": "categorical",
+      "name": "age"
+    },
+    {
+      "kind": "categorical",
+      "name": "workclass"
+    },
+    {
+      "kind": "continuous",
+      "name": "fnlwgt"
+    },
+    {
+      "kind": "categorical",
+      "name": "education"
+    },
+    {
+      "kind": "continuous",
+      "name": "education-num"
+    },
+    {
+      "kind": "categorical",
+      "name": "marital-status"
+    },
+    {
+      "kind": "categorical",
+      "name": "occupation"
+    },
+    {
+      "kind": "categorical",
+      "name": "relationship"
+    },
+    {
+      "kind": "categorical",
+      "name": "race"
+    },
+    {
+      "kind": "categorical",
+      "name": "sex"
+    },
+    {
+      "kind": "continuous",
+      "name": "capital-gain"
+    },
+    {
+      "kind": "continuous",
+      "name": "capital-loss"
+    },
+    {
+      "kind": "continuous",
+      "name": "hours-per-week"
+    },
+    {
+      "kind": "categorical",
+      "name": "native-country"
+    },
+    {
+      "kind": "categorical",
+      "name": "income"
+    }
+  ],
+  "dataset": "adult",
+  "rows": 45222,
+  "test": "/Users/shohei/dev/CrossCat/data/adult/adult.test",
+  "train": "/Users/shohei/dev/CrossCat/data/adult/adult.data"
+}

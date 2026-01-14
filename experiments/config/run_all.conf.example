@@ -1,0 +1,15 @@
+# Example overrides for experiments/run_all.sh
+
+# MODE_LIST=("speed" "convergence")
+# DATASETS=("synthetic" "dha" "adult")
+# MODELS=("original" "genjax_cpu" "genjax_gpu")
+
+# ROWS_SYN=("1000")
+# COLS_SYN=("10" "50" "100")
+# ROWS_ADULT=("100" "1000" "10000" "50000")
+# COLS_ADULT=("15")
+
+# ITER_SPEED=200
+# ITER_CONV=200
+# N_GRID=100
+# LIKELIHOOD_INTERVAL=10

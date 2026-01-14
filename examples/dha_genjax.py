@@ -1,4 +1,4 @@
-"""Run the legacy DHA CrossCat demo inside the GenJAX environment."""
+"""Run the original DHA CrossCat demo inside the GenJAX environment."""
 
 from __future__ import annotations
 
@@ -204,7 +204,7 @@ def main():
         "--iterations",
         type=int,
         default=200,
-        help="Number of Gibbs sweeps to run (legacy num_transitions analogue).",
+        help="Number of Gibbs sweeps to run (original num_transitions analogue).",
     )
     parser.add_argument(
         "--predictive-samples",

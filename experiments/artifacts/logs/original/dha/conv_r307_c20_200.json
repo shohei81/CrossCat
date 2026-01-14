@@ -1,0 +1,47 @@
+{
+  "cols": 20, 
+  "dataset": "dha", 
+  "env": {
+    "platform": "cpu"
+  }, 
+  "mode": "convergence", 
+  "model": "original", 
+  "note": "Ran crosscat.LocalEngine.analyze successfully", 
+  "notes": {
+    "logscore_source": "diagnostic_utils/get_logscore or X_L.logscore"
+  }, 
+  "params": {
+    "iterations": 200, 
+    "likelihood_interval": 10, 
+    "n_grid": 100, 
+    "seed": 0
+  }, 
+  "results": {
+    "avg_time_per_iter_sec": 0.032221239805221555, 
+    "compilation_time_sec": null, 
+    "log_likelihood_history": [
+      -46679.745353182574, 
+      -46433.12708842823, 
+      -46280.54581115081, 
+      -46335.223696936315, 
+      -46308.84228373982, 
+      -47359.29912691302, 
+      -46459.64506756633, 
+      -46405.9537642436, 
+      -46271.09950408003, 
+      -47103.69827580234, 
+      -46280.04875832004, 
+      -46689.35776478086, 
+      -46178.073472796765, 
+      -46048.170729956844, 
+      -46100.34381677824, 
+      -46053.856039177364, 
+      -46831.32881355232, 
+      -45818.20214709839, 
+      -45718.93682500294, 
+      -45712.96351770778
+    ], 
+    "total_time_sec": 6.4442479610443115
+  }, 
+  "rows": 307
+}
